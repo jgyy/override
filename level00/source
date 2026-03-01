@@ -13,7 +13,6 @@ int main(int argc, char **argv)
     printf("Password: ");
     scanf("%d", &input);
 
-    // Key comparison at offset 80484e7
     // cmp $0x149c,%eax  (0x149c = 5276 in decimal)
     if (input == 0x149c) {
         puts("Authenticated!");
