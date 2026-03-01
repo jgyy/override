@@ -1,0 +1,46 @@
+# Level 03 Walkthrough - XOR Cipher Reverse
+
+## Logic
+
+```
+main()  -> srand(time(0)) -> scanf(input) -> test(input, 0x1337d00d)
+test()  -> diff = 0x1337d00d - input
+          if diff <= 0x15: decrypt(diff)
+          else:            decrypt(rand())    <- random, uncontrollable
+decrypt(key) -> XOR cipher[] with key -> compare "Congratulations!"
+               if match -> system("/bin/sh")
+```
+
+## Cracking the Key
+
+Encrypted bytes (from movl immediates in decrypt):
+```
+0x51 0x7d 0x7c 0x75  0x60 0x73 0x66 0x67
+0x7e 0x73 0x66 0x7b  0x7d 0x7c 0x61 0x33  0x00
+```
+
+XOR with "Congratulations!\0" gives a constant key = **0x12 = 18** for every byte.
+
+## Finding the Input
+
+We need `diff = 0x1337d00d - input = 18`, so:
+```
+input = 0x1337d00d - 18 = 0x1337cffb = 322424827
+```
+This keeps `diff <= 0x15`, so `decrypt(18)` is called (not random).
+
+## Stdin Buffering Trick
+
+`scanf` uses a fully-buffered stdio stream when stdin is a pipe, so it consumes
+all pipe data before spawning the shell. Use a FIFO to deliver writes independently:
+
+```bash
+mkfifo /tmp/l3p
+(echo 322424827; sleep 0.3; echo "cat /home/users/level04/.pass"; sleep 0.3) > /tmp/l3p &
+./level03 < /tmp/l3p
+rm -f /tmp/l3p
+```
+
+## Flag
+
+`kgv3tkEb9h2mLkRsPkXRfc2mHbjMxQzvb2FrgKkf`

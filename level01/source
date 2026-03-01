@@ -1,0 +1,72 @@
+// level01 - Admin Login Authentication
+// Decompiled from binary analysis using objdump
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+char a_user_name[100];  // Global buffer at 0x804a040
+
+int verify_user_name(void)
+{
+    puts("verifying username....");
+
+    // Compare first 7 bytes of user input with "dat_wil"
+    // Hardcoded string at 0x80486a8
+    int result = strncmp(a_user_name, "dat_wil", 7);
+
+    // Return 0 if match, non-zero if different
+    return result;
+}
+
+int verify_user_pass(char *password)
+{
+    // Compare first 5 bytes of password with "admin"
+    // Hardcoded string at 0x80486b0
+    int result = strncmp(password, "admin", 5);
+
+    // Return 0 if match, non-zero if different
+    return result;
+}
+
+int main(void)
+{
+    char password[100];
+    int username_result;
+    int password_result;
+
+    // Print banner
+    puts("*****************************************");
+    puts("*      -Level01 -         *");
+    puts("*****************************************");
+
+    // Read username
+    printf("Enter Username: ");
+    fgets(a_user_name, 256, stdin);
+
+    // Verify username
+    username_result = verify_user_name();
+
+    if (username_result != 0) {
+        puts("nope, incorrect username...");
+        return 1;
+    }
+
+    // Read password (if username is correct)
+    puts("Enter Password: ");
+    fgets(password, 100, stdin);
+
+    // Verify password
+    password_result = verify_user_pass(password);
+
+    // Check password result
+    // NOTE: The logic here appears inverted in the binary
+    if (password_result == 0) {
+        puts("nope, incorrect password...");
+        return 1;
+    }
+
+    // If we reach here, authentication succeeded
+    // In actual binary, this path may not be reachable due to logic inversion
+    return 0;
+}

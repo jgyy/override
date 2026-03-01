@@ -1,0 +1,98 @@
+# Level 0 Walkthrough - Magic Number Authentication
+
+## Challenge Summary
+The level00 binary is a SUID executable that asks for a password. The vulnerability is a hardcoded magic number check that can be discovered through binary analysis.
+
+## VM Setup Command
+```bash
+qemu-system-x86_64 -m 2048 -cdrom ./OverRide.iso -boot d -net nic,model=virtio -net user,hostfwd=tcp::4242-:4242
+```
+
+## Solution Steps
+
+### 1.1 Extract Binary from VM
+sshpass -p level00 scp -o StrictHostKeyChecking=no -P 4242 level00@localhost:/home/users/level00/level00 ./level00
+
+### 1.2 SSH into VM
+sshpass -p level00 ssh -o StrictHostKeyChecking=no level00@localhost -p 4242
+
+### 2. Binary Analysis
+
+Extract strings to find clues:
+```bash
+strings level00 | grep -E "(Password|Authenticated|Invalid)"
+```
+Output shows:
+- "Password:" - prompts for input
+- "Authenticated!" - success message
+- "Invalid Password!" - failure message
+
+### 3. Disassembly Analysis
+
+Use objdump to find the magic number:
+```bash
+objdump -d level00 | grep -A 10 "cmp.*eax"
+```
+
+Key instruction found at offset 80484e7:
+```
+cmp    $0x149c,%eax
+```
+
+This compares the input with **0x149c** which is **5276 in decimal**.
+
+### 4. Exploit Execution
+
+```bash
+(echo 5276; sleep 0.5; echo "cat /home/users/level01/.pass"; sleep 0.5) | ./level00
+```
+
+Output:
+```
+***********************************
+*      -Level00 -          *
+***********************************
+Password:
+Authenticated!
+uSq2ehEGT6c9S24zbshexZQBXUGrncxn5sD5QfGL
+```
+
+### 5. Flag
+**Level01 Password: uSq2ehEGT6c9S24zbshexZQBXUGrncxn5sD5QfGL**
+
+## Vulnerability Details
+
+The binary performs a simple integer comparison against a hardcoded value:
+
+```c
+if (input == 0x149c) {  // 5276 decimal
+    puts("Authenticated!");
+    system("/bin/sh");
+} else {
+    puts("Invalid Password!");
+}
+```
+
+Since the binary has the SUID bit set (rwsr-s---), spawning /bin/sh executes it with level01 privileges, allowing us to read the password file.
+
+## Tools Used
+- `strings` - Extract readable strings from binary
+- `objdump` - Disassemble and analyze binary
+- `sshpass` - Automated SSH login
+- `scp` - Copy binary from VM
+
+## Alternative Analysis Methods
+
+### Using radare2:
+```bash
+r2 level00
+aa              # Analyze all
+s main          # Seek to main
+pdf             # Print disassembly
+pdc             # Print C-like code
+```
+
+### Using Ghidra (GUI):
+1. Download from https://github.com/NationalSecurityAgency/ghidra/releases
+2. Load binary and analyze
+3. Find main function and view decompiled code

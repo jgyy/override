@@ -1,0 +1,24 @@
+// level05 - Format string vulnerability
+// Decompiled from binary analysis
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    char buf[100];
+
+    // Read up to 100 bytes from stdin
+    fgets(buf, 100, stdin);
+
+    // Convert uppercase (A-Z) to lowercase: XOR 0x20
+    for (int i = 0; i < strlen(buf); i++) {
+        if (buf[i] > '@' && buf[i] <= 'Z') {
+            buf[i] ^= 0x20;
+        }
+    }
+
+    // Vulnerability: printf called with user-controlled format string
+    printf(buf);   // FORMAT STRING BUG
+
+    exit(0);
+}

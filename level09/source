@@ -1,0 +1,87 @@
+// level09 - Messaging service with struct field overflow
+// Decompiled from binary analysis using objdump/strings
+// 64-bit PIE ELF, setuid end/users, no stack canary
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+// Struct layout (192 bytes total, lives on handle_msg's stack)
+typedef struct s_msg {
+    char msg[140];      // offset 0x000 - message body (strncpy destination)
+    char username[40];  // offset 0x08c - username (set by set_username)
+    int  msg_len;       // offset 0x0b4 - max bytes for strncpy; init to 140 (0x8c)
+    char _pad[8];       // offset 0x0b8 - padding to 192 bytes
+} t_msg;                // sizeof = 0xc0 = 192
+
+// Hidden function: never called legitimately.
+// Reads a command from stdin and passes it to system().
+void secret_backdoor(void)
+{
+    char cmd[128];
+    fgets(cmd, 128, stdin);
+    system(cmd);
+}
+
+// Copies the message body into the struct.
+// BUG: strncpy uses msg->msg_len as the length — this field is
+// controlled by set_username (see below) and can be inflated to 255,
+// overflowing the 140-byte msg field and corrupting the return address
+// of handle_msg.
+void set_msg(t_msg *msg)
+{
+    char buf[1024];
+
+    memset(buf, 0, sizeof(buf));
+    puts(">: Msg @Unix-Dude");
+    printf(">>: ");
+    fgets(buf, 1024, stdin);
+
+    // msg->msg_len is 140 normally, but set_username can overwrite it
+    strncpy((char *)msg, buf, msg->msg_len);
+}
+
+// Reads a username and stores it in msg->username[0..40].
+// BUG: the loop runs for indices 0 through 40 inclusive (41 iterations),
+// writing one byte past the 40-byte username field into msg->msg_len's
+// low byte.  An attacker who sends 41 non-null bytes controls msg->msg_len.
+void set_username(t_msg *msg)
+{
+    char buf[128];
+    int  i;
+
+    memset(buf, 0, sizeof(buf));
+    puts(">: Enter your username");
+    printf(">>: ");
+    fgets(buf, 128, stdin);
+
+    // Copies buf[i] -> msg->username[i] for i in 0..40 (one past the end!)
+    for (i = 0; i <= 40 && buf[i]; i++)
+        msg->username[i] = buf[i];
+
+    printf(">: Welcome, %s", msg->username);
+}
+
+void handle_msg(void)
+{
+    t_msg msg;
+
+    // Zero only the username + msg_len portion
+    memset(&msg.username, 0, sizeof(msg.username) + sizeof(msg.msg_len));
+
+    // Initialize msg_len to the safe value (140 = sizeof msg.msg)
+    msg.msg_len = 140;  // 0x8c
+
+    set_username(&msg);
+    set_msg(&msg);
+    puts(">: Msg sent!");
+}
+
+int main(void)
+{
+    puts("--------------------------------------------");
+    puts("|   ~Welcome to l33t-m$n ~    v1337        |");
+    puts("--------------------------------------------");
+    handle_msg();
+    return 0;
+}

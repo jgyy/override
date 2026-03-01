@@ -1,0 +1,55 @@
+// level04 - fork + ptrace anti-debug challenge
+// Decompiled from binary analysis
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ptrace.h>
+#include <sys/wait.h>
+#include <sys/prctl.h>
+#include <signal.h>
+
+// Registered via .init_array - sets alarm(60) before main()
+void enable_timeout_cons() {
+    alarm(60);
+}
+
+int main() {
+    int status;
+    pid_t pid;
+
+    pid = fork();
+
+    if (pid == 0) {
+        // Child process
+        prctl(PR_SET_PDEATHSIG, SIGHUP);
+        ptrace(PTRACE_TRACEME, 0, NULL, NULL);  // Allow parent to trace us
+        puts("Give me some shellcode, k");
+
+        // Vulnerability: gets() reads unbounded input onto stack
+        char buffer[128];   // actual offset to EIP = 156 bytes
+        gets(buffer);       // STACK OVERFLOW HERE
+    } else {
+        // Parent process - monitors child
+        while (1) {
+            wait(&status);
+            if (WIFSTOPPED(status)) {
+                // Check if child called execve (syscall 11)
+                long orig_eax = ptrace(PTRACE_PEEKUSER, pid,
+                                       4 * ORIG_EAX, NULL);
+                if (orig_eax == 11) {
+                    // Kill child if it tries execve
+                    puts("no exec() for you");
+                    kill(pid, SIGKILL);
+                    break;
+                }
+                // Otherwise let child continue
+                ptrace(PTRACE_CONT, pid, NULL, NULL);
+            } else {
+                break;
+            }
+        }
+    }
+    return 0;
+}

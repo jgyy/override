@@ -1,0 +1,69 @@
+// level06 - Serial Authentication
+// Decompiled from binary analysis using objdump/gdb
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/ptrace.h>
+
+int auth(char *username, int serial)
+{
+    // Strip trailing newline
+    username[strcspn(username, "\n")] = '\0';
+
+    int len = strnlen(username, 32);
+
+    // Username must be longer than 5 characters
+    if (len <= 5)
+        return 1;
+
+    // Anti-debug: if we are being traced (e.g. under gdb), ptrace returns -1
+    if (ptrace(PTRACE_TRACEME, 0, 1, 0) == -1) {
+        puts("You have a daughter. Her name is Emma, and she is our target.");
+        puts("Now go. Protect her.");
+        puts("...");
+        return 1;
+    }
+
+    // Seed the hash from the 4th character of the username
+    int val = (username[3] ^ 0x1337) + 0x5eeded;
+
+    for (int i = 0; i < len; i++) {
+        // Reject control characters
+        if ((unsigned char)username[i] <= 0x1f)
+            return 1;
+
+        // Accumulate: val += (username[i] ^ val) % 1337
+        int tmp = username[i] ^ val;
+        tmp = tmp % 1337;   // compiler emits multiply-shift magic for this
+        val += tmp;
+    }
+
+    // Serial must exactly match the computed hash
+    return (serial == val) ? 0 : 1;
+}
+
+int main(int argc, char **argv)
+{
+    char username[20];  // fgets reads up to 0x20 (32) bytes at esp+0x2c
+    int  serial;        // scanf reads into esp+0x28
+
+    puts("***********************************");
+    puts("*\t\tlevel06\t\t  *");
+    puts("***********************************");
+    printf("-> Enter Login: ");
+    fgets(username, 32, stdin);
+
+    puts("***********************************");
+    puts("***** NEW ACCOUNT DETECTED ********");
+    puts("***********************************");
+    printf("-> Enter Serial: ");
+    scanf("%u", &serial);
+
+    if (auth(username, serial) == 0) {
+        puts("Authenticated!");
+        system("/bin/sh");
+        return 0;
+    }
+    return 1;
+}
