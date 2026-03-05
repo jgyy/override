@@ -55,22 +55,6 @@ def compute_serial(username):
 
 For `"user42"`: serial = **6232888**
 
-## One-liner
-
-```bash
-python -c "
-username = 'user42'
-val = (ord(username[3]) ^ 0x1337) + 0x5eeded
-for c in username:
-    val += (ord(c) ^ val) % 1337
-print val
-"
-# -> 6232888
-
-(echo user42; echo 6232888; echo 'cat /home/users/level07/.pass') \
-  | /home/users/level06/level06
-```
-
-## Flag
-
-`GbcPDRgsFK77LNnnuh7QyFYA2942Gp8yKj9KrWD8`
+## Commands
+(echo user42; echo 6232888; cat) | /home/users/level06/level06
+cat /home/users/level07/.pass

