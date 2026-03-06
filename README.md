@@ -133,9 +133,9 @@ You will be challenged during this project. You have to overcome these challenge
   -rw-r--r-- 1 root root 50 Dec 3 15:22 flag
   -rw-r--r-- 1 root root 60 Dec 3 15:22 source
   -rw-r--r-- 1 root root 1 Dec 3 15:22 walkthrough
-  drwxr-xr-x 2 root root 4096 Dec 3 15:22 ressources
+  drwxr-xr-x 2 root root 4096 Dec 3 15:22 resources
 
-  level00/ressources:
+  level00/resources:
   total 8
   drwxr-xr-x 2 root root 4096 Dec 3 15:22 .
   drwxr-xr-x 2 root root 4096 Dec 3 15:22 .
